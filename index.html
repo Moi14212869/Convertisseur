@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Convertisseur JPG → ICO</title>
+<style>
+    /* Reset simple */
+    * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+body {
+    background: #f0f4f8;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+.main {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+
+    .container {
+        background: #fff;
+        padding: 40px 30px;
+        border-radius: 20px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        text-align: center;
+        width: 350px;
+    }
+
+    h2 {
+        margin-bottom: 20px;
+        color: #333;
+    }
+
+    p {
+        margin-bottom: 20px;
+        font-size: 0.9rem;
+        color: #555;
+    }
+
+    input[type="file"] {
+        display: block;
+        margin: 0 auto 20px auto;
+        padding: 10px;
+        border-radius: 10px;
+        border: 1px solid #ccc;
+        cursor: pointer;
+    }
+
+    button {
+        background: #4f46e5;
+        color: white;
+        border: none;
+        padding: 12px 25px;
+        border-radius: 10px;
+        font-size: 1rem;
+        cursor: pointer;
+        transition: 0.3s;
+    }
+
+    button:hover {
+        background: #3730a3;
+    }
+footer {
+    background-color: #272740;
+    text-align: center;
+    padding: 20px;
+    color: #aaa;
+}
+
+footer a {
+    color: #8b8bff;
+    text-decoration: none;
+}
+
+footer a:hover {
+    text-decoration: underline;
+}
+
+</style>
+</head>
+<body>
+<div class="main">
+<div class="container">
+    <h2>Convertisseur JPG → ICO</h2>
+    <p>Choisissez une image JPG ou PNG et cliquez sur "Convertir en ICO".</p>
+    <input type="file" id="upload" accept="image/jpeg,image/png"/>
+    <button id="convert">Convertir en ICO</button>
+</div>
+</div>
+    <footer>
+        &copy; 2026 <a href="moi14212869.github.io/onelevel">OneLevel Studio</a>. Tous droits réservés.
+    </footer>
+<script>
+const sizes = [16, 32, 48, 64, 128, 256];
+
+function resizeImage(img, size) {
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, size, size);
+    return ctx.getImageData(0, 0, size, size);
+}
+
+function generateICO(imageDatas) {
+    const headerSize = 6;
+    const dirEntrySize = 16;
+    const numImages = imageDatas.length;
+
+    let offset = headerSize + dirEntrySize * numImages;
+    const buffers = [];
+
+    const header = new ArrayBuffer(headerSize);
+    const hview = new DataView(header);
+    hview.setUint16(0, 0, true);
+    hview.setUint16(2, 1, true);
+    hview.setUint16(4, numImages, true);
+    buffers.push(header);
+
+    const entries = [];
+    imageDatas.forEach((imgData) => {
+        const entry = new ArrayBuffer(dirEntrySize);
+        const view = new DataView(entry);
+        view.setUint8(0, imgData.width === 256 ? 0 : imgData.width);
+        view.setUint8(1, imgData.height === 256 ? 0 : imgData.height);
+        view.setUint8(2, 0);
+        view.setUint8(3, 0);
+        view.setUint16(4, 1, true);
+        view.setUint16(6, 32, true);
+        const imgBuffer = imageDataToBMP(imgData);
+        view.setUint32(8, imgBuffer.byteLength, true);
+        view.setUint32(12, offset, true);
+        buffers.push(entry);
+        offset += imgBuffer.byteLength;
+        entries.push(imgBuffer);
+    });
+
+    buffers.push(...entries);
+
+    const totalLength = buffers.reduce((sum, b) => sum + b.byteLength, 0);
+    const icoArray = new Uint8Array(totalLength);
+    let pos = 0;
+    buffers.forEach(b => {
+        icoArray.set(new Uint8Array(b), pos);
+        pos += b.byteLength;
+    });
+
+    return new Blob([icoArray], { type: 'image/x-icon' });
+}
+
+function imageDataToBMP(imgData) {
+    const width = imgData.width;
+    const height = imgData.height;
+    const pixels = imgData.data;
+    const rowSize = width * 4;
+    const imgSize = rowSize * height;
+    const fileSize = 40 + imgSize;
+    const buffer = new ArrayBuffer(fileSize);
+    const view = new DataView(buffer);
+
+    view.setUint32(0, 40, true);
+    view.setInt32(4, width, true);
+    view.setInt32(8, height * 2, true);
+    view.setUint16(12, 1, true);
+    view.setUint16(14, 32, true);
+    view.setUint32(16, 0, true);
+    view.setUint32(20, imgSize, true);
+    view.setInt32(24, 0, true);
+    view.setInt32(28, 0, true);
+    view.setUint32(32, 0, true);
+    view.setUint32(36, 0, true);
+
+    let p = 40;
+    for (let y = height - 1; y >= 0; y--) {
+        for (let x = 0; x < width; x++) {
+            const idx = (y * width + x) * 4;
+            view.setUint8(p++, pixels[idx + 2]);
+            view.setUint8(p++, pixels[idx + 1]);
+            view.setUint8(p++, pixels[idx]);
+            view.setUint8(p++, pixels[idx + 3]);
+        }
+    }
+    return buffer;
+}
+
+document.getElementById('convert').onclick = async () => {
+    const file = document.getElementById('upload').files[0];
+    if (!file) return alert("Choisissez une image JPG ou PNG");
+
+    const img = new Image();
+    img.src = URL.createObjectURL(file);
+    await img.decode();
+
+    const imageDatas = sizes.map(size => resizeImage(img, size));
+    const icoBlob = generateICO(imageDatas);
+
+    // 🔹 Récupérer le nom d'origine sans extension
+    const originalName = file.name.replace(/\.[^/.]+$/, "");
+    const icoName = originalName + ".ico";
+
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(icoBlob);
+    link.download = icoName; // 👈 nom conservé
+    link.click();
+};
+
+</script>
+</body>
+</html>
